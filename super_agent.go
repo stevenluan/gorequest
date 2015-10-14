@@ -54,7 +54,7 @@ type SuperAgent struct {
 }
 
 // Used to create a new SuperAgent object.
-func New() *SuperAgent {
+func new() *SuperAgent {
 	cookiejarOptions := cookiejar.Options{
 		PublicSuffixList: publicsuffix.List,
 	}
