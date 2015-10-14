@@ -22,7 +22,7 @@ type Client interface {
 	Request() HTTPRequest
 	Timeout(timeout time.Duration) Client
 	Retry(
-		times int,
+		maxRetries int,
 		backoff float64,
 		shouldRetry ...func(*http.Response, []byte, []error) bool,
 	) Client
@@ -37,6 +37,7 @@ type HTTPRequest interface {
 	Delete(targetURL string) HTTPRequest
 	Patch(targetURL string) HTTPRequest
 	Set(param string, value string) HTTPRequest
+	SetHeaders(headers map[string]string) HTTPRequest
 	Type(typeStr string) HTTPRequest
 	Query(content interface{}) HTTPRequest
 	Send(content interface{}) HTTPRequest
@@ -45,8 +46,8 @@ type HTTPRequest interface {
 	EndStruct(content interface{}) (*http.Response, []byte, []error)
 }
 
-// ClientImpl is the data structure to hold client configuration.
-type ClientImpl struct {
+// clientImpl is the data structure to hold client configuration.
+type clientImpl struct {
 	client           *http.Client
 	transport        *http.Transport
 	maxRetries       int
@@ -59,7 +60,7 @@ type ClientImpl struct {
 // New creates new client object.
 // This should be called once only to reuse the http transport.
 func New() Client {
-	c := &ClientImpl{
+	c := &clientImpl{
 		client:           newHTTPClient(),
 		transport:        &http.Transport{},
 		maxRetries:       0,
@@ -72,7 +73,7 @@ func New() Client {
 }
 
 // Retry sets the retry configuration
-func (c *ClientImpl) Retry(
+func (c *clientImpl) Retry(
 	maxRetries int,
 	backoff float64,
 	shouldRetry ...func(*http.Response, []byte, []error) bool,
@@ -87,7 +88,7 @@ func (c *ClientImpl) Retry(
 }
 
 // Timeout sets the timeout configuration
-func (c *ClientImpl) Timeout(timeout time.Duration) Client {
+func (c *clientImpl) Timeout(timeout time.Duration) Client {
 	c.transport.Dial = func(network, addr string) (net.Conn, error) {
 		conn, err := net.DialTimeout(network, addr, timeout)
 		if err != nil {
@@ -102,7 +103,7 @@ func (c *ClientImpl) Timeout(timeout time.Duration) Client {
 // HTTPRequest starts single http request
 // This can be called multiple times
 // Each returned request should be only used in single goroutine.
-func (c *ClientImpl) Request() HTTPRequest {
+func (c *clientImpl) Request() HTTPRequest {
 	return newRequest(
 		c.client,
 		c.transport,
@@ -114,8 +115,8 @@ func (c *ClientImpl) Request() HTTPRequest {
 	)
 }
 
-// RequestImpl is the data structure for single http request.
-type RequestImpl struct {
+// requestImpl is the data structure for single http request.
+type requestImpl struct {
 	superAgent       *SuperAgent
 	maxRetries       int
 	backoff          float64
@@ -137,7 +138,7 @@ func newRequest(
 	shouldRetry func(*http.Response, []byte, []error) bool,
 ) HTTPRequest {
 	superAgent := newSuperAgent(client, transport)
-	r := &RequestImpl{
+	r := &requestImpl{
 		client:           client,
 		transport:        transport,
 		maxRetries:       maxRetries,
@@ -152,67 +153,75 @@ func newRequest(
 }
 
 // Get makes http Get request
-func (r *RequestImpl) Get(targetURL string) HTTPRequest {
+func (r *requestImpl) Get(targetURL string) HTTPRequest {
 	r.superAgent.Get(targetURL)
 	return r
 }
 
 // Post makes http Post request
-func (r *RequestImpl) Post(targetURL string) HTTPRequest {
+func (r *requestImpl) Post(targetURL string) HTTPRequest {
 	r.superAgent.Post(targetURL)
 	return r
 }
 
 // Put makes http Put request
-func (r *RequestImpl) Put(targetURL string) HTTPRequest {
+func (r *requestImpl) Put(targetURL string) HTTPRequest {
 	r.superAgent.Put(targetURL)
 	return r
 }
 
 // Head makes http Head request
-func (r *RequestImpl) Head(targetURL string) HTTPRequest {
+func (r *requestImpl) Head(targetURL string) HTTPRequest {
 	r.superAgent.Head(targetURL)
 	return r
 }
 
 // Delete makes http Delete request
-func (r *RequestImpl) Delete(targetURL string) HTTPRequest {
+func (r *requestImpl) Delete(targetURL string) HTTPRequest {
 	r.superAgent.Delete(targetURL)
 	return r
 }
 
 // Patch makes http Patch request
-func (r *RequestImpl) Patch(targetURL string) HTTPRequest {
+func (r *requestImpl) Patch(targetURL string) HTTPRequest {
 	r.superAgent.Patch(targetURL)
 	return r
 }
 
 // Set add http header to the request
-func (r *RequestImpl) Set(param string, value string) HTTPRequest {
+func (r *requestImpl) Set(param string, value string) HTTPRequest {
 	r.superAgent.Set(param, value)
 	return r
 }
 
+// SetHeaders add http header to the request
+func (r *requestImpl) SetHeaders(headers map[string]string) HTTPRequest {
+	for key, value := range headers {
+		r.superAgent.Set(key, value)
+	}
+	return r
+}
+
 // Type sets the response type of the request
-func (r *RequestImpl) Type(typeStr string) HTTPRequest {
+func (r *requestImpl) Type(typeStr string) HTTPRequest {
 	r.superAgent.Type(typeStr)
 	return r
 }
 
 // Query sets the http get query params
-func (r *RequestImpl) Query(content interface{}) HTTPRequest {
+func (r *requestImpl) Query(content interface{}) HTTPRequest {
 	r.superAgent.Query(content)
 	return r
 }
 
 // Send adds content to the body in http request
-func (r *RequestImpl) Send(content interface{}) HTTPRequest {
+func (r *requestImpl) Send(content interface{}) HTTPRequest {
 	r.superAgent.Send(content)
 	return r
 }
 
 // End is the function to end the chain and fires the actual http request.
-func (r *RequestImpl) End() (resp *http.Response, body string, errors []error) {
+func (r *requestImpl) End() (resp *http.Response, body string, errors []error) {
 	r.retryEnd(func() bool {
 		var goResp Response
 		goResp, body, errors = r.superAgent.End()
@@ -223,7 +232,7 @@ func (r *RequestImpl) End() (resp *http.Response, body string, errors []error) {
 }
 
 // EndBytes is the end function returns []byte as body.
-func (r *RequestImpl) EndBytes() (resp *http.Response, body []byte, errors []error) {
+func (r *requestImpl) EndBytes() (resp *http.Response, body []byte, errors []error) {
 	r.retryEnd(func() bool {
 		var goResp Response
 		goResp, body, errors = r.superAgent.EndBytes()
@@ -234,7 +243,7 @@ func (r *RequestImpl) EndBytes() (resp *http.Response, body []byte, errors []err
 }
 
 // EndStruct is the end function unmarshal json body to data struct
-func (r *RequestImpl) EndStruct(content interface{}) (resp *http.Response, body []byte, errors []error) {
+func (r *requestImpl) EndStruct(content interface{}) (resp *http.Response, body []byte, errors []error) {
 	r.retryEnd(func() bool {
 		var goResp Response
 		goResp, body, errors = r.superAgent.EndBytes()
@@ -248,7 +257,7 @@ func (r *RequestImpl) EndStruct(content interface{}) (resp *http.Response, body 
 	return
 }
 
-func (r *RequestImpl) retryEnd(do func() bool) {
+func (r *requestImpl) retryEnd(do func() bool) {
 	retry := &retryActor{
 		do:               do,
 		backoff:          r.backoff,
