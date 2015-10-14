@@ -3,6 +3,8 @@ GoRequest
 
 Forked version of GoRequest to add retry, and shared Transport in multiple SuperAgent instances.
 
+You should avoid calling gorequest.New() multiple times for each request. Share the return gorequest.New() for same http service as much as possible.
+
 GoRequest -- Simplified HTTP client ( inspired by famous SuperAgent lib in Node.js )
 
 ![GopherGoRequest](https://raw.githubusercontent.com/parnurzeal/gorequest/gh-pages/images/Gopher_GoRequest_400x300.jpg)
@@ -50,14 +52,15 @@ resp, err := http.Get("http://example.com/")
 With GoRequest:
 
 ```go
-request := gorequest.New()
-resp, body, errs := request.Get("http://example.com/").End()
+client := gorequest.New()
+resp, body, errs := client.Request().Get("http://example.com/").End()
 ```
 
 Or below if you don't want to reuse it for other requests.
 
 ```go
-resp, body, errs := gorequest.New().Get("http://example.com/").End()
+client := gorequest.New()
+resp, body, errs := client.Request().Get("http://example.com/").End()
 ```
 
 How about getting control over HTTP client headers, redirect policy, and etc. Things is getting more complicated in golang. You need to create a Client, setting header in different command, ... to do just only one __GET__
@@ -76,7 +79,7 @@ resp, err := client.Do(req)
 Why making things ugly while you can just do as follows:
 
 ```go
-request := gorequest.New()
+request := gorequest.New().Request()
 resp, body, errs := request.Get("http://example.com").
   RedirectPolicy(redirectPolicyFunc).
   Set("If-None-Match", `W/"wyzzy"`).
@@ -114,7 +117,7 @@ resp, _ := client.Do(req)
 Compared to our GoRequest version, JSON is for sure a default. So, it turns out to be just one simple line!:
 
 ```go
-request := gorequest.New()
+request := gorequest.New().Request()
 resp, body, errs := request.Post("http://example.com").
   Set("Notes","gorequst is coming!").
   Send(`{"name":"backy", "species":"dog"}`).
@@ -129,7 +132,7 @@ type BrowserVersionSupport struct {
   Firefox string
 }
 ver := BrowserVersionSupport{ Chrome: "37.0.2041.6", Firefox: "30.0" }
-request := gorequest.New()
+request := gorequest.New().Request()
 resp, body, errs := request.Post("http://version.com/update").
   Send(ver).
   Send(`{"Safari":"5.1.10"}`).
@@ -147,7 +150,7 @@ Let's see a bit of callback example:
 func printStatus(resp gorequest.Response, body string, errs []error){
   fmt.Println(resp.Status)
 }
-gorequest.New().Get("http://example.com").End(printStatus)
+gorequest.New().Request().Get("http://example.com").End(printStatus)
 ```
 
 ## Proxy
@@ -155,7 +158,7 @@ gorequest.New().Get("http://example.com").End(printStatus)
 In the case when you are behind proxy, GoRequest can handle it easily with Proxy func:
 
 ```go
-request := gorequest.New().Proxy("http://proxy:999")
+request := gorequest.New().Request().Proxy("http://proxy:999")
 resp, body, errs := request.Get("http://example-proxy.com").End()
 // To reuse same client with no_proxy, use empty string:
 resp, body, errs = request.Proxy("").("http://example-no-proxy.com").End()
@@ -166,7 +169,7 @@ resp, body, errs = request.Proxy("").("http://example-no-proxy.com").End()
 To add a basic authentication header:
 
 ```go
-request := gorequest.New().SetBasicAuth("username", "password")
+request := gorequest.New().Request().SetBasicAuth("username", "password")
 resp, body, errs := request.Get("http://example-proxy.com").End()
 ```
 
@@ -175,8 +178,8 @@ resp, body, errs := request.Get("http://example-proxy.com").End()
 Timeout can be set in any time duration using time package:
 
 ```go
-request := gorequest.New().Timeout(2*time.Millisecond)
-resp, body, errs:= request.Get("http://example.com").End()
+client := gorequest.New().Timeout(2*time.Millisecond)
+resp, body, errs:= client.Request().Get("http://example.com").End()
 ```
 
 Timeout func defines both dial + read/write timeout to the specified time parameter.
@@ -188,7 +191,21 @@ Thanks to @jaytaylor, we now have EndBytes to use when you want the body as byte
 The callbacks work the same way as with `End`, except that a byte array is used instead of a string.
 
 ```go
-resp, bodyBytes, errs := gorequest.New().Get("http://example.com/").EndBytes()
+resp, bodyBytes, errs := gorequest.New().Request().Get("http://example.com/").EndBytes()
+```
+
+## EndStruct
+
+Thanks to @jaytaylor, we now have EndBytes to use when you want the body as bytes.
+
+The callbacks work the same way as with `End`, except that a byte array is used instead of a string.
+
+```go
+type YourData struct {
+  name string
+}
+data := &YourData{}
+resp, bodyBytes, errs := gorequest.New().Request().Get("http://example.com/").EndStruct(data)
 ```
 
 ## Debug
