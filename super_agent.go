@@ -612,6 +612,7 @@ func (s *SuperAgent) EndBytes(callback ...func(response Response, body []byte, e
 	if s.Debug {
 		dump, err := httputil.DumpRequest(req, true)
 		s.logger.SetPrefix("[http] ")
+		s.logger.Println("Headers:", req.Header)
 		if err != nil {
 			s.logger.Println("Error:", err)
 		} else {

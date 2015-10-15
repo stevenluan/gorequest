@@ -44,6 +44,7 @@ type HTTPRequest interface {
 	End() (*http.Response, string, []error)
 	EndBytes() (resp *http.Response, body []byte, errors []error)
 	EndStruct(content interface{}) (*http.Response, []byte, []error)
+	SetDebug(enabled bool) HTTPRequest
 }
 
 // clientImpl is the data structure to hold client configuration.
@@ -257,6 +258,12 @@ func (r *requestImpl) EndStruct(content interface{}) (resp *http.Response, body 
 	return
 }
 
+// SetDebug to set the debug flag of SuperAgent
+func (r *requestImpl) SetDebug(enabled bool) HTTPRequest {
+	r.superAgent.SetDebug(enabled)
+	return r
+}
+
 func (r *requestImpl) retryEnd(do func() bool) {
 	retry := &retryActor{
 		do:               do,
@@ -293,7 +300,7 @@ func newSuperAgent(
 		BasicAuth:  struct{ Username, Password string }{},
 		Debug:      false,
 	}
-	superAgent.SetLogger(golog.New(os.Stderr, "[gohttp]", golog.LstdFlags))
+	superAgent.SetLogger(golog.New(os.Stdout, "[gohttp]", golog.LstdFlags))
 	return superAgent
 }
 
