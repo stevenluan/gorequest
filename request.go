@@ -26,6 +26,7 @@ type Client interface {
 		backoff float64,
 		shouldRetry ...func(*http.Response, []byte, []error) bool,
 	) Client
+	SetPrintf(printf func(format string, v ...interface{})) Client
 }
 
 // HTTPRequest represents the http request. The methods are mostly from SuperAgent.
@@ -56,11 +57,13 @@ type clientImpl struct {
 	minRetryPeriod   time.Duration
 	retryPeriodRange time.Duration
 	shouldRetry      func(*http.Response, []byte, []error) bool
+	printf           func(format string, v ...interface{})
 }
 
 // New creates new client object.
 // This should be called once only to reuse the http transport.
 func New() Client {
+	logger := golog.New(os.Stdout, "[gohttp]", golog.LstdFlags)
 	c := &clientImpl{
 		client:           newHTTPClient(),
 		transport:        &http.Transport{},
@@ -69,6 +72,7 @@ func New() Client {
 		minRetryPeriod:   100 * time.Millisecond,
 		retryPeriodRange: 200 * time.Millisecond,
 		shouldRetry:      defaultShouldRetry,
+		printf:           logger.Printf,
 	}
 	return c
 }
@@ -101,6 +105,12 @@ func (c *clientImpl) Timeout(timeout time.Duration) Client {
 	return c
 }
 
+// Timeout sets the timeout configuration
+func (c *clientImpl) SetPrintf(printf func(format string, v ...interface{})) Client {
+	c.printf = printf
+	return c
+}
+
 // HTTPRequest starts single http request
 // This can be called multiple times
 // Each returned request should be only used in single goroutine.
@@ -113,6 +123,7 @@ func (c *clientImpl) Request() HTTPRequest {
 		c.minRetryPeriod,
 		c.retryPeriodRange,
 		c.shouldRetry,
+		c.printf,
 	)
 }
 
@@ -137,8 +148,9 @@ func newRequest(
 	minRetryPeriod time.Duration,
 	retryPeriodRange time.Duration,
 	shouldRetry func(*http.Response, []byte, []error) bool,
+	printf func(format string, v ...interface{}),
 ) HTTPRequest {
-	superAgent := newSuperAgent(client, transport)
+	superAgent := newSuperAgent(client, transport, printf)
 	r := &requestImpl{
 		client:           client,
 		transport:        transport,
@@ -286,6 +298,7 @@ func newHTTPClient() *http.Client {
 func newSuperAgent(
 	client *http.Client,
 	transport *http.Transport,
+	printf func(format string, v ...interface{}),
 ) *SuperAgent {
 	superAgent := &SuperAgent{
 		TargetType: "json",
@@ -299,8 +312,8 @@ func newSuperAgent(
 		Errors:     nil,
 		BasicAuth:  struct{ Username, Password string }{},
 		Debug:      false,
+		Printf:     printf,
 	}
-	superAgent.SetLogger(golog.New(os.Stdout, "[gohttp]", golog.LstdFlags))
 	return superAgent
 }
 

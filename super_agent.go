@@ -50,7 +50,7 @@ type SuperAgent struct {
 	Errors     []error
 	BasicAuth  struct{ Username, Password string }
 	Debug      bool
-	logger     *log.Logger
+	Printf     func(format string, v ...interface{})
 }
 
 // Used to create a new SuperAgent object.
@@ -59,6 +59,7 @@ func new() *SuperAgent {
 		PublicSuffixList: publicsuffix.List,
 	}
 	jar, _ := cookiejar.New(&cookiejarOptions)
+	log.New(os.Stderr, "[gorequest]", log.LstdFlags)
 	s := &SuperAgent{
 		TargetType: "json",
 		Data:       make(map[string]interface{}),
@@ -71,7 +72,7 @@ func new() *SuperAgent {
 		Errors:     nil,
 		BasicAuth:  struct{ Username, Password string }{},
 		Debug:      false,
-		logger:     log.New(os.Stderr, "[gorequest]", log.LstdFlags),
+		Printf:     log.Printf,
 	}
 	return s
 }
@@ -82,8 +83,8 @@ func (s *SuperAgent) SetDebug(enable bool) *SuperAgent {
 	return s
 }
 
-func (s *SuperAgent) SetLogger(logger *log.Logger) *SuperAgent {
-	s.logger = logger
+func (s *SuperAgent) SetPrintf(printf func(format string, v ...interface{})) *SuperAgent {
+	s.Printf = printf
 	return s
 }
 
@@ -611,12 +612,10 @@ func (s *SuperAgent) EndBytes(callback ...func(response Response, body []byte, e
 	// Log details of this request
 	if s.Debug {
 		dump, err := httputil.DumpRequest(req, true)
-		s.logger.SetPrefix("[http] ")
-		s.logger.Println("Headers:", req.Header)
 		if err != nil {
-			s.logger.Println("Error:", err)
+			s.Printf("Error: %v", err)
 		} else {
-			s.logger.Printf("HTTP Request: %s", string(dump))
+			s.Printf("HTTP Request: %s", string(dump))
 		}
 	}
 
@@ -632,9 +631,9 @@ func (s *SuperAgent) EndBytes(callback ...func(response Response, body []byte, e
 	if s.Debug {
 		dump, err := httputil.DumpResponse(resp, true)
 		if nil != err {
-			s.logger.Println("Error:", err)
+			s.Printf("Error: %v", err)
 		} else {
-			s.logger.Printf("HTTP Response: %s", string(dump))
+			s.Printf("HTTP Response: %s", string(dump))
 		}
 	}
 
