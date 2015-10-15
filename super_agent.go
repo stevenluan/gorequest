@@ -567,6 +567,7 @@ func (s *SuperAgent) EndBytes(callback ...func(response Response, body []byte, e
 				return nil, nil, s.Errors
 			}
 			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Accept", "application/json")
 		} else if s.TargetType == "form" {
 			formData := changeMapToURLValues(s.Data)
 			req, err = http.NewRequest(s.Method, s.Url, strings.NewReader(formData.Encode()))
