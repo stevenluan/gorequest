@@ -238,6 +238,29 @@ func TestHTTPEndStruct(t *testing.T) {
 	}
 }
 
+func TestHTTPEndStructNil(t *testing.T) {
+	var jsonBlob = []byte(`{"agoraName": "Platypus", "agoraNote": "Monotremata"}`)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		w.Write(jsonBlob)
+	}))
+	defer ts.Close()
+
+	c := New()
+	{
+		resp, bodyBytes, errs := c.Request().Get(ts.URL).EndStruct(nil)
+		if len(errs) > 0 {
+			t.Errorf("Unexpected errors: %s", errs)
+		}
+		if resp.StatusCode != 200 {
+			t.Errorf("Expected StatusCode=200, actual StatusCode=%v", resp.StatusCode)
+		}
+		if bodyBytes == nil {
+			t.Errorf("Expected bodyBytes=%s, actual bodyBytes=%s", string(bodyBytes), string(jsonBlob))
+		}
+	}
+}
+
 // testing for Retry method
 func TestHTTPRetry(t *testing.T) {
 	const case1Empty = "/"

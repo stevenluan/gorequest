@@ -263,6 +263,9 @@ func (r *requestImpl) EndStruct(content interface{}) (resp *http.Response, body 
 		resp = convert(goResp)
 		return r.shouldRetry(resp, body, errors)
 	})
+	if content == nil {
+		return
+	}
 	err := json.Unmarshal(body, content)
 	if err != nil {
 		errors = append(errors, err)
