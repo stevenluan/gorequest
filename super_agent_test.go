@@ -99,6 +99,7 @@ func TestPost(t *testing.T) {
 	// Check that the number conversion should be converted as string not float64
 	const case8_send_json_with_long_id_number = "/send_json_with_long_id_number"
 	const case9_send_json_string_with_long_id_number_as_form_result = "/send_json_string_with_long_id_number_as_form_result"
+	const case10_send_json_struct_pointer = "/send_json_struct_pointer"
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// check method is PATCH before going to check other features
 		if r.Method != POST {
@@ -172,6 +173,14 @@ func TestPost(t *testing.T) {
 			if string(body) != `id=123456789&name=nemo` {
 				t.Error(`Expected Body with "id=123456789&name=nemo"`, `| but got`, string(body))
 			}
+		case case10_send_json_struct_pointer:
+			t.Logf("case %v ", case10_send_json_struct_pointer)
+			defer r.Body.Close()
+			body, _ := ioutil.ReadAll(r.Body)
+			if string(body) != `{"Lower":{"Color":"green","Size":1.7},"Upper":{"Color":"red","Size":0},"name":"Cindy"}` {
+				t.Error(`Expected Body with {"Lower":{"Color":"green","Size":1.7},"Upper":{"Color":"red","Size":0},"name":"Cindy"}`, `| but got`, string(body))
+			}
+
 		}
 	}))
 
@@ -240,6 +249,9 @@ func TestPost(t *testing.T) {
 	new().Post(ts.URL + case9_send_json_string_with_long_id_number_as_form_result).
 		Type("form").
 		Send(`{"id":123456789, "name":"nemo"}`).
+		End()
+	new().Post(ts.URL + case10_send_json_struct_pointer).
+		Send(&myStyle).
 		End()
 }
 

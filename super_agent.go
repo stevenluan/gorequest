@@ -418,6 +418,8 @@ func (s *SuperAgent) Send(content interface{}) *SuperAgent {
 		s.SendString(v.String())
 	case reflect.Struct:
 		s.sendStruct(v.Interface())
+	case reflect.Ptr:
+		s.sendStruct(v.Interface())
 	default:
 		// TODO: leave default for handling other types in the future such as number, byte, etc...
 	}
