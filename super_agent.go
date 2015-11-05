@@ -422,6 +422,7 @@ func (s *SuperAgent) Send(content interface{}) *SuperAgent {
 		s.sendStruct(v.Interface())
 	default:
 		// TODO: leave default for handling other types in the future such as number, byte, etc...
+		s.Errors = append(s.Errors, errors.New("Type func: incorrect type \""+reflect.TypeOf(content).Name()+"\""))
 	}
 	return s
 }

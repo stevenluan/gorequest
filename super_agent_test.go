@@ -100,6 +100,7 @@ func TestPost(t *testing.T) {
 	const case8_send_json_with_long_id_number = "/send_json_with_long_id_number"
 	const case9_send_json_string_with_long_id_number_as_form_result = "/send_json_string_with_long_id_number_as_form_result"
 	const case10_send_json_struct_pointer = "/send_json_struct_pointer"
+	const case11_send_slice_unsupported = "/send_unsuported_slice"
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// check method is PATCH before going to check other features
 		if r.Method != POST {
@@ -180,7 +181,10 @@ func TestPost(t *testing.T) {
 			if string(body) != `{"Lower":{"Color":"green","Size":1.7},"Upper":{"Color":"red","Size":0},"name":"Cindy"}` {
 				t.Error(`Expected Body with {"Lower":{"Color":"green","Size":1.7},"Upper":{"Color":"red","Size":0},"name":"Cindy"}`, `| but got`, string(body))
 			}
-
+		case case11_send_slice_unsupported:
+			t.Logf("case %v ", case11_send_slice_unsupported)
+			defer r.Body.Close()
+			t.Error(`Expected body not sending to server`)
 		}
 	}))
 
@@ -250,9 +254,17 @@ func TestPost(t *testing.T) {
 		Type("form").
 		Send(`{"id":123456789, "name":"nemo"}`).
 		End()
+
 	new().Post(ts.URL + case10_send_json_struct_pointer).
 		Send(&myStyle).
 		End()
+
+	_, _, errors := new().Post(ts.URL + case11_send_slice_unsupported).
+		Send([]byte(`{"id":123456789, "name":"nemo"}`)).
+		End()
+	if len(errors) == 0 {
+		t.Error(`Expected errors is returned when unsupported data is passed to Send`, errors)
+	}
 }
 
 // testing for Patch method
