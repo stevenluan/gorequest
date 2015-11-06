@@ -34,6 +34,8 @@ const (
 	PATCH  = "PATCH"
 )
 
+var typeOfBytes = reflect.TypeOf([]byte(nil))
+
 // A SuperAgent is a object storing all request data for client.
 type SuperAgent struct {
 	Url        string
@@ -420,9 +422,25 @@ func (s *SuperAgent) Send(content interface{}) *SuperAgent {
 		s.sendStruct(v.Interface())
 	case reflect.Ptr:
 		s.sendStruct(v.Interface())
+	case reflect.Slice:
+		if v.Type() == typeOfBytes {
+			s.sendBytes(v.Interface().([]byte))
+		} else {
+			s.Errors = append(s.Errors, errors.New("Type func: incorrect slice type \""+reflect.TypeOf(content).Name()+"\""))
+		}
+
 	default:
 		// TODO: leave default for handling other types in the future such as number, byte, etc...
 		s.Errors = append(s.Errors, errors.New("Type func: incorrect type \""+reflect.TypeOf(content).Name()+"\""))
+	}
+	return s
+}
+
+func (s *SuperAgent) sendBytes(data []byte) *SuperAgent {
+	// TODO: add normal text mode or other mode to Send func
+
+	if err := json.Unmarshal(data, &s.Data); err != nil {
+		s.Errors = append(s.Errors, err)
 	}
 	return s
 }

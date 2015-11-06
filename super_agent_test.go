@@ -101,6 +101,7 @@ func TestPost(t *testing.T) {
 	const case9_send_json_string_with_long_id_number_as_form_result = "/send_json_string_with_long_id_number_as_form_result"
 	const case10_send_json_struct_pointer = "/send_json_struct_pointer"
 	const case11_send_slice_unsupported = "/send_unsuported_slice"
+	const case12_send_bytes = "/case12_send_bytes"
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// check method is PATCH before going to check other features
 		if r.Method != POST {
@@ -185,6 +186,13 @@ func TestPost(t *testing.T) {
 			t.Logf("case %v ", case11_send_slice_unsupported)
 			defer r.Body.Close()
 			t.Error(`Expected body not sending to server`)
+		case case12_send_bytes:
+			t.Logf("case %v ", case11_send_slice_unsupported)
+			defer r.Body.Close()
+			body, _ := ioutil.ReadAll(r.Body)
+			if string(body) != `{"id":12,"name":"nemo"}` {
+				t.Error(`Expected Body with {"id":12,"name":"nemo"}`, `| but got`, string(body))
+			}
 		}
 	}))
 
@@ -260,10 +268,17 @@ func TestPost(t *testing.T) {
 		End()
 
 	_, _, errors := new().Post(ts.URL + case11_send_slice_unsupported).
-		Send([]byte(`{"id":123456789, "name":"nemo"}`)).
+		Send(map[string]string{"name": "test"}).
 		End()
 	if len(errors) == 0 {
 		t.Error(`Expected errors is returned when unsupported data is passed to Send`, errors)
+	}
+
+	_, _, errors1 := new().Post(ts.URL + case12_send_bytes).
+		Send([]byte(`{"id":12,"name":"nemo"}`)).
+		End()
+	if len(errors1) > 0 {
+		t.Error(`Expected errors is returned when unsupported data is passed to Send`, errors1)
 	}
 }
 
