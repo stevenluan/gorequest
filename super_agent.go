@@ -3,12 +3,10 @@ package gorequest
 
 import (
 	"bytes"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
 	"log"
-	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httputil"
@@ -47,8 +45,8 @@ type SuperAgent struct {
 	FormData   url.Values
 	QueryData  url.Values
 	Client     *http.Client
-	Transport  *http.Transport
 	Cookies    []*http.Cookie
+	Jar        *cookiejar.Jar
 	Errors     []error
 	BasicAuth  struct{ Username, Password string }
 	Debug      bool
@@ -69,12 +67,20 @@ func new() *SuperAgent {
 		FormData:   url.Values{},
 		QueryData:  url.Values{},
 		Client:     &http.Client{Jar: jar},
-		Transport:  &http.Transport{},
 		Cookies:    make([]*http.Cookie, 0),
 		Errors:     nil,
 		BasicAuth:  struct{ Username, Password string }{},
 		Debug:      false,
 		Printf:     log.Printf,
+		Jar:        jar,
+	}
+	return s
+}
+
+func (s *SuperAgent) Timeout(timeout time.Duration) *SuperAgent {
+	s.Client = &http.Client{
+		Jar:     s.Jar,
+		Timeout: timeout,
 	}
 	return s
 }
@@ -309,59 +315,6 @@ func (s *SuperAgent) queryString(content string) *SuperAgent {
 // This Param is then created as an alternative method to solve this.
 func (s *SuperAgent) Param(key string, value string) *SuperAgent {
 	s.QueryData.Add(key, value)
-	return s
-}
-
-func (s *SuperAgent) Timeout(timeout time.Duration) *SuperAgent {
-	s.Transport.Dial = func(network, addr string) (net.Conn, error) {
-		conn, err := net.DialTimeout(network, addr, timeout)
-		if err != nil {
-			s.Errors = append(s.Errors, err)
-			return nil, err
-		}
-		conn.SetDeadline(time.Now().Add(timeout))
-		return conn, nil
-	}
-	return s
-}
-
-// Set TLSClientConfig for underling Transport.
-// One example is you can use it to disable security check (https):
-//
-//      gorequest.New().TLSClientConfig(&tls.Config{ InsecureSkipVerify: true}).
-//        Get("https://disable-security-check.com").
-//        End()
-//
-func (s *SuperAgent) TLSClientConfig(config *tls.Config) *SuperAgent {
-	s.Transport.TLSClientConfig = config
-	return s
-}
-
-// Proxy function accepts a proxy url string to setup proxy url for any request.
-// It provides a convenience way to setup proxy which have advantages over usual old ways.
-// One example is you might try to set `http_proxy` environment. This means you are setting proxy up for all the requests.
-// You will not be able to send different request with different proxy unless you change your `http_proxy` environment again.
-// Another example is using Golang proxy setting. This is normal prefer way to do but too verbase compared to GoRequest's Proxy:
-//
-//      gorequest.New().Proxy("http://myproxy:9999").
-//        Post("http://www.google.com").
-//        End()
-//
-// To set no_proxy, just put empty string to Proxy func:
-//
-//      gorequest.New().Proxy("").
-//        Post("http://www.google.com").
-//        End()
-//
-func (s *SuperAgent) Proxy(proxyUrl string) *SuperAgent {
-	parsedProxyUrl, err := url.Parse(proxyUrl)
-	if err != nil {
-		s.Errors = append(s.Errors, err)
-	} else if proxyUrl == "" {
-		s.Transport.Proxy = nil
-	} else {
-		s.Transport.Proxy = http.ProxyURL(parsedProxyUrl)
-	}
 	return s
 }
 
@@ -627,9 +580,6 @@ func (s *SuperAgent) EndBytes(callback ...func(response Response, body []byte, e
 	for _, cookie := range s.Cookies {
 		req.AddCookie(cookie)
 	}
-
-	// Set Transport
-	s.Client.Transport = s.Transport
 
 	// Log details of this request
 	if s.Debug {

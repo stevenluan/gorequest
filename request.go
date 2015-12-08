@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	golog "log"
 	"math/rand"
-	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -50,8 +49,7 @@ type HTTPRequest interface {
 
 // clientImpl is the data structure to hold client configuration.
 type clientImpl struct {
-	client           *http.Client
-	transport        *http.Transport
+	httpClient       *http.Client
 	maxRetries       int
 	backoff          float64
 	minRetryPeriod   time.Duration
@@ -65,8 +63,7 @@ type clientImpl struct {
 func New() Client {
 	logger := golog.New(os.Stdout, "[gohttp]", golog.LstdFlags)
 	c := &clientImpl{
-		client:           newHTTPClient(),
-		transport:        &http.Transport{},
+		httpClient:       newHTTPClient(5000 * time.Millisecond),
 		maxRetries:       0,
 		backoff:          float64(0),
 		minRetryPeriod:   100 * time.Millisecond,
@@ -94,14 +91,7 @@ func (c *clientImpl) Retry(
 
 // Timeout sets the timeout configuration
 func (c *clientImpl) Timeout(timeout time.Duration) Client {
-	c.transport.Dial = func(network, addr string) (net.Conn, error) {
-		conn, err := net.DialTimeout(network, addr, timeout)
-		if err != nil {
-			return nil, err
-		}
-		conn.SetDeadline(time.Now().Add(timeout))
-		return conn, nil
-	}
+	c.httpClient = newHTTPClient(timeout)
 	return c
 }
 
@@ -116,8 +106,7 @@ func (c *clientImpl) SetPrintf(printf func(format string, v ...interface{})) Cli
 // Each returned request should be only used in single goroutine.
 func (c *clientImpl) Request() HTTPRequest {
 	return newRequest(
-		c.client,
-		c.transport,
+		c.httpClient,
 		c.maxRetries,
 		c.backoff,
 		c.minRetryPeriod,
@@ -132,8 +121,7 @@ type requestImpl struct {
 	superAgent       *SuperAgent
 	maxRetries       int
 	backoff          float64
-	client           *http.Client
-	transport        *http.Transport
+	httpClient       *http.Client
 	minRetryPeriod   time.Duration
 	retryPeriodRange time.Duration
 	shouldRetry      func(*http.Response, []byte, []error) bool
@@ -141,8 +129,7 @@ type requestImpl struct {
 
 // newRequest creates object of HTTPRequest type
 func newRequest(
-	client *http.Client,
-	transport *http.Transport,
+	httpClient *http.Client,
 	maxRetries int,
 	backoff float64,
 	minRetryPeriod time.Duration,
@@ -150,10 +137,9 @@ func newRequest(
 	shouldRetry func(*http.Response, []byte, []error) bool,
 	printf func(format string, v ...interface{}),
 ) HTTPRequest {
-	superAgent := newSuperAgent(client, transport, printf)
+	superAgent := newSuperAgent(httpClient, printf)
 	r := &requestImpl{
-		client:           client,
-		transport:        transport,
+		httpClient:       httpClient,
 		maxRetries:       maxRetries,
 		backoff:          backoff,
 		superAgent:       superAgent,
@@ -290,17 +276,16 @@ func (r *requestImpl) retryEnd(do func() bool) {
 	retry.act()
 }
 
-func newHTTPClient() *http.Client {
+func newHTTPClient(timeout time.Duration) *http.Client {
 	cookiejarOptions := cookiejar.Options{
 		PublicSuffixList: publicsuffix.List,
 	}
 	jar, _ := cookiejar.New(&cookiejarOptions)
-	return &http.Client{Jar: jar}
+	return &http.Client{Jar: jar, Timeout: timeout}
 }
 
 func newSuperAgent(
 	client *http.Client,
-	transport *http.Transport,
 	printf func(format string, v ...interface{}),
 ) *SuperAgent {
 	superAgent := &SuperAgent{
@@ -310,7 +295,6 @@ func newSuperAgent(
 		FormData:   url.Values{},
 		QueryData:  url.Values{},
 		Client:     client,
-		Transport:  transport,
 		Cookies:    make([]*http.Cookie, 0),
 		Errors:     nil,
 		BasicAuth:  struct{ Username, Password string }{},

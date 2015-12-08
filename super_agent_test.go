@@ -11,8 +11,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/elazarl/goproxy"
 )
 
 // testing for Get method
@@ -442,28 +440,6 @@ func TestEndBytes(t *testing.T) {
 		if string(bodyBytes) != serverOutput {
 			t.Errorf("Expected bodyBytes=%s, actual bodyBytes=%s", serverOutput, string(bodyBytes))
 		}
-	}
-}
-
-func TestProxyFunc(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, "proxy passed")
-	}))
-	defer ts.Close()
-	// start proxy
-	proxy := goproxy.NewProxyHttpServer()
-	proxy.OnRequest().DoFunc(
-		func(r *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-			return r, nil
-		})
-	ts2 := httptest.NewServer(proxy)
-	// sending request via Proxy
-	resp, body, _ := new().Proxy(ts2.URL).Get(ts.URL).End()
-	if resp.StatusCode != 200 {
-		t.Errorf("Expected 200 Status code")
-	}
-	if body != "proxy passed" {
-		t.Errorf("Expected 'proxy passed' body string")
 	}
 }
 
